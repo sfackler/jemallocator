@@ -153,7 +153,10 @@ fn main() {
     }
     // Disable -Wextra warnings - jemalloc doesn't compile free of warnings with
     // it enabled: https://github.com/jemalloc/jemalloc/issues/1196
-    let compiler = cc::Build::new().extra_warnings(false).get_compiler();
+    let build = cc::Build::new();
+    let compiler = build.clone().extra_warnings(false).get_compiler();
+    let ar = build.get_archiver().get_program().to_owned();
+    let ranlib = build.get_ranlib().get_program().to_owned();
     let cflags = compiler.cflags_env();
     let ldflags = read_and_watch_env("LDFLAGS")
         .map(OsString::from)
@@ -171,6 +174,8 @@ fn main() {
         cc
     };
 
+    info!("AR={:?}", ar);
+    info!("RANLIB={:?}", ranlib);
     info!("CC={:?}", cc);
     info!("CFLAGS={:?}", cflags);
     info!("LDFLAGS={:?}", ldflags);
@@ -209,6 +214,8 @@ fn main() {
     )
     .current_dir(&build_dir)
     .env("CC", &cc)
+    .env("AR", &ar)
+    .env("RANLIB", &ranlib)
     .env("CFLAGS", &cflags)
     .env("LDFLAGS", &ldflags)
     .env("CPPFLAGS", &cppflags)
