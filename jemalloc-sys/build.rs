@@ -10,8 +10,8 @@
 
 use std::{
     env,
-    ffi::OsString,
-    fs, io,
+    ffi::{OsStr, OsString},
+    fs, io, iter,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -408,16 +408,33 @@ fn main() {
 }
 
 /// Formats a tool command from `cc` (e.g. the archiver) for use as an environment variable like
-/// `AR`, which configure and make split on whitespace. This keeps any arguments, like those from
-/// `AR="zig ar"` or `ARFLAGS`, in the same way that `cc_env()` and `cflags_env()` do for the
-/// compiler.
+/// `AR`. This keeps any arguments, like those from `AR="zig ar"` or `ARFLAGS`.
+///
+/// jemalloc's build only uses these in make recipes, which are run by the shell, so each word is
+/// quoted to preserve paths containing spaces.
 fn command_env(cmd: &Command) -> OsString {
-    let mut env = cmd.get_program().to_owned();
-    for arg in cmd.get_args() {
-        env.push(" ");
-        env.push(arg);
+    let mut env = OsString::new();
+    for (i, word) in iter::once(cmd.get_program())
+        .chain(cmd.get_args())
+        .enumerate()
+    {
+        if i > 0 {
+            env.push(" ");
+        }
+        env.push(shell_quote(word));
     }
     env
+}
+
+fn shell_quote(word: &OsStr) -> OsString {
+    let is_safe = |c: char| c.is_ascii_alphanumeric() || "+,-./:=@_%".contains(c);
+    match word.to_str() {
+        Some(s) if s.is_empty() || !s.chars().all(is_safe) => {
+            format!("'{}'", s.replace('\'', "'\\''")).into()
+        }
+        // Safe words and (rare) non-UTF-8 ones are passed through as-is.
+        _ => word.to_owned(),
+    }
 }
 
 fn make_command(make_cmd: &str, build_dir: &Path, num_jobs: &str) -> Command {
