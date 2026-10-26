@@ -155,8 +155,8 @@ fn main() {
     // it enabled: https://github.com/jemalloc/jemalloc/issues/1196
     let build = cc::Build::new();
     let compiler = build.clone().extra_warnings(false).get_compiler();
-    let ar = build.get_archiver().get_program().to_owned();
-    let ranlib = build.get_ranlib().get_program().to_owned();
+    let ar = command_env(&build.get_archiver());
+    let ranlib = command_env(&build.get_ranlib());
     let cflags = compiler.cflags_env();
     let ldflags = read_and_watch_env("LDFLAGS")
         .map(OsString::from)
@@ -405,6 +405,19 @@ fn main() {
             .compile("pthread_atfork");
         println!("cargo:rerun-if-changed=src/pthread_atfork.c");
     }
+}
+
+/// Formats a tool command from `cc` (e.g. the archiver) for use as an environment variable like
+/// `AR`, which configure and make split on whitespace. This keeps any arguments, like those from
+/// `AR="zig ar"` or `ARFLAGS`, in the same way that `cc_env()` and `cflags_env()` do for the
+/// compiler.
+fn command_env(cmd: &Command) -> OsString {
+    let mut env = cmd.get_program().to_owned();
+    for arg in cmd.get_args() {
+        env.push(" ");
+        env.push(arg);
+    }
+    env
 }
 
 fn make_command(make_cmd: &str, build_dir: &Path, num_jobs: &str) -> Command {
